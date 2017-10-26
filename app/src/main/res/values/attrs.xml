@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="ScanResultView">
+        <attr name="srv_label" format="reference|string" />
+        <attr name="srv_image" format="reference" />
+    </declare-styleable>
+</resources>
