@@ -3,7 +3,6 @@ package com.markotron.ble.scanning
 import android.app.Application
 import android.arch.lifecycle.AndroidViewModel
 import android.arch.lifecycle.ViewModelProviders
-import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.os.Bundle
 import android.support.design.widget.Snackbar
@@ -77,14 +76,16 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
           .distinctUntilChanged()
           .switchMap {
             if (it == true)
-              devices.filter { it.bleDevice.name != null }.onErrorResumeNext { Observable.empty() }
+              devices
+                  .filter { filterOnlyBellabeatDevices(it.bleDevice.name) }
+                  .onErrorResumeNext { logErrorAndComplete("Error while scanning!", it) }
             else Observable.empty()
           }
           .map { Command.NewScanResult(it) }
 
   private fun bleStateFeedback() = bleClient
       .observeStateChanges()
-      .startWith(bleClient.state)
+      .startWith(Observable.fromCallable { bleClient.state })
       .distinctUntilChanged()
       .map {
         when (it) {
@@ -104,6 +105,14 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                      .filter { it.bleDevice.macAddress == newResult.bleDevice.macAddress })
           .plus(newResult)
           .sortedByDescending { it.rssi }
+
+  private fun logErrorAndComplete(msg: String, t: Throwable): Observable<ScanResult> {
+    Log.d("SCAN VIEW MODEL", msg, t)
+    return Observable.empty()
+  }
+
+  private fun filterOnlyBellabeatDevices(name: String?) =
+      name != null && (name.startsWith("Leaf") || name.startsWith("Spring"))
 
 }
 
