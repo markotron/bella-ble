@@ -5,6 +5,7 @@
     <uses-permission
         android:name="android.permission.ACCESS_COARSE_LOCATION"
         android:maxSdkVersion="22" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
@@ -22,6 +23,9 @@
             </intent-filter>
         </activity>
         <activity android:name=".device.DeviceActivity"></activity>
+        <meta-data
+            android:name="io.fabric.ApiKey"
+            android:value="ee469b33d43f7fc0914459d75930c9ec280e5dd9" />
     </application>
 
 </manifest>
