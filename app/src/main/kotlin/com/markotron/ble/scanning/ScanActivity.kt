@@ -4,18 +4,24 @@ import android.app.Application
 import android.arch.lifecycle.AndroidViewModel
 import android.arch.lifecycle.ViewModelProviders
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
+import android.preference.PreferenceManager
 import android.support.design.widget.Snackbar
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.LinearLayoutManager
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import com.markotron.ble.BellaBleApp
 import com.markotron.ble.R
 import com.markotron.ble.device.DeviceActivity
+import com.markotron.ble.settings.SettingsActivity
 import com.polidea.rxandroidble.RxBleClient.State.*
 import com.polidea.rxandroidble.scan.ScanResult
 import com.polidea.rxandroidble.scan.ScanSettings
 import kotlinx.android.synthetic.main.activity_scanning.*
+import rx.Emitter
 import rx.Observable
 import rx.android.schedulers.AndroidSchedulers
 import rx.subjects.PublishSubject
@@ -29,13 +35,14 @@ sealed class State {
   object LocationPermissionNotGranted : State()
   object BluetoothNotEnabled : State()
   object LocationServicesNotEnabled : State()
-  data class BluetoothReady(val devices: List<ScanResult> = listOf()) : State()
+  data class BluetoothReady(val devices: List<ScanResult> = listOf(), val filter: String = "SPRING_LEAF") : State()
 }
 
 sealed class Command {
   object Refresh : Command()
   data class NewScanResult(val scanResult: ScanResult) : Command()
   data class SetBleState(val state: State) : Command()
+  data class Filter(val value: String) : Command()
 }
 
 class ScanViewModel(app: Application) : AndroidViewModel(app) {
@@ -46,73 +53,96 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
   private val commands = PublishSubject.create<Command>()
   private val replay = ReplaySubject.createWithSize<State>(1)
 
+  private val prefs = PreferenceManager.getDefaultSharedPreferences(app)
+
   // API
   val state: Observable<State> = Observable
-      .merge(commands, scanningFeedback(replay), bleStateFeedback())
-      .doOnNext { Log.d("COMMAND", it.toString()) }
-      .scan<State>(State.Start) { state, command ->
-        when (command) {
-          is Command.Refresh ->
-            if (state is State.BluetoothReady) State.BluetoothReady()
-            else state
-          is Command.SetBleState -> command.state
-          is Command.NewScanResult ->
-            if (state is State.BluetoothReady)
-              State.BluetoothReady(updateScanResultList(state.devices, command.scanResult))
-            else state
-        }
+    .merge(commands, scanningFeedback(replay), bleStateFeedback(), filterFeedback())
+    .doOnNext { Log.d("COMMAND", it.toString()) }
+    .scan<State>(State.Start) { state, command ->
+      when (command) {
+        is Command.Refresh ->
+          (state as? State.BluetoothReady)?.copy(devices = listOf()) ?: state
+        is Command.SetBleState -> command.state
+        is Command.NewScanResult ->
+          if (state is State.BluetoothReady)
+            state.copy(devices = updateScanResultList(state.devices, command.scanResult))
+          else state
+        is Command.Filter -> (state as? State.BluetoothReady)?.copy(filter = command.value) ?: state
       }
-      .doOnNext { replay.onNext(it) }
-      .doOnNext { Log.d("STATE", it.toString()) }
-      .replay(1)
-      .refCount()
+    }
+    .doOnNext { replay.onNext(it) }
+    .doOnNext { Log.d("STATE", it.toString()) }
+    .replay(1)
+    .refCount()
 
   fun sendCommand(c: Command) = commands.onNext(c)
 
   // FEEDBACKS
   private fun scanningFeedback(state: Observable<State>) =
-      state
-          .map { it is State.BluetoothReady }
-          .distinctUntilChanged()
-          .switchMap {
-            if (it == true)
-              devices
-                  .filter { filterOnlyBellabeatDevices(it.bleDevice.name) }
-                  .onErrorResumeNext { logErrorAndComplete("Error while scanning!", it) }
-            else Observable.empty()
-          }
-          .map { Command.NewScanResult(it) }
+    state
+      .distinctUntilChanged { s -> (s as? State.BluetoothReady)?.filter ?: "" }
+      .switchMap { s ->
+        if (s is State.BluetoothReady)
+          devices
+            .filter { filterOnlySelectedDevices(it.bleDevice.name, s.filter) }
+            .onErrorResumeNext { logErrorAndComplete("Error while scanning!", it) }
+        else Observable.empty()
+      }
+      .map { Command.NewScanResult(it) }
 
   private fun bleStateFeedback() = bleClient
-      .observeStateChanges()
-      .startWith(Observable.fromCallable { bleClient.state })
-      .distinctUntilChanged()
-      .map {
-        when (it) {
-          READY -> Command.SetBleState(State.BluetoothReady(listOf()))
-          BLUETOOTH_NOT_AVAILABLE -> Command.SetBleState(State.BluetoothNotAvailable)
-          LOCATION_PERMISSION_NOT_GRANTED -> Command.SetBleState(State.LocationPermissionNotGranted)
-          LOCATION_SERVICES_NOT_ENABLED -> Command.SetBleState(State.LocationServicesNotEnabled)
-          BLUETOOTH_NOT_ENABLED -> Command.SetBleState(State.BluetoothNotEnabled)
-          null -> throw RuntimeException("The bluetooth state enum is null!")
-        }
+    .observeStateChanges()
+    .startWith(Observable.fromCallable { bleClient.state })
+    .distinctUntilChanged()
+    .map {
+      when (it) {
+        READY -> Command.SetBleState(State.BluetoothReady(listOf()))
+        BLUETOOTH_NOT_AVAILABLE -> Command.SetBleState(State.BluetoothNotAvailable)
+        LOCATION_PERMISSION_NOT_GRANTED -> Command.SetBleState(State.LocationPermissionNotGranted)
+        LOCATION_SERVICES_NOT_ENABLED -> Command.SetBleState(State.LocationServicesNotEnabled)
+        BLUETOOTH_NOT_ENABLED -> Command.SetBleState(State.BluetoothNotEnabled)
+        null -> throw RuntimeException("The bluetooth state enum is null!")
       }
+    }
+
+  private fun filterFeedback() = Observable.create<Command>({ emitter ->
+    val listener: (SharedPreferences, String) -> Unit = { sp, k ->
+      if (k == "device_types_to_scan")
+        emitter.onNext(Command.Filter(sp.getString(k, "")))
+    }
+    prefs.registerOnSharedPreferenceChangeListener(listener)
+    emitter.setCancellation {
+      prefs.unregisterOnSharedPreferenceChangeListener(listener)
+    }
+  }, Emitter.BackpressureMode.NONE)
+    .startWith(Observable.fromCallable<Command> {
+      Command.Filter(prefs.getString("device_types_to_scan", ""))
+    })
 
   // HELPERS
   private fun updateScanResultList(currentResults: List<ScanResult>, newResult: ScanResult) =
-      currentResults
-          .minus(currentResults
-                     .filter { it.bleDevice.macAddress == newResult.bleDevice.macAddress })
-          .plus(newResult)
-          .sortedByDescending { it.rssi }
+    currentResults
+      .minus(currentResults
+        .filter { it.bleDevice.macAddress == newResult.bleDevice.macAddress })
+      .plus(newResult)
+      .sortedByDescending { it.rssi }
 
   private fun logErrorAndComplete(msg: String, t: Throwable): Observable<ScanResult> {
     Log.d("SCAN VIEW MODEL", msg, t)
     return Observable.empty()
   }
 
-  private fun filterOnlyBellabeatDevices(name: String?) =
-      name != null && (name.startsWith("Leaf") || name.startsWith("Spring"))
+  private fun filterOnlySelectedDevices(name: String?, selection: String): Boolean {
+    return if (name == null)
+      false
+    else when (selection) {
+      "LEAF" -> name.startsWith("Leaf")
+      "SPRING" -> name.startsWith("Spring")
+      "SPRING_LEAF" -> name.startsWith("Leaf") || name.startsWith("Spring")
+      else -> throw RuntimeException("No devices like this: $selection")
+    }
+  }
 
 }
 
@@ -136,21 +166,31 @@ class ScanActivity : AppCompatActivity() {
     swipe_refresh_layout.setOnRefreshListener(this::onRefreshListener)
   }
 
+  override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+    menuInflater.inflate(R.menu.settings, menu)
+    return true
+  }
+
+  override fun onOptionsItemSelected(item: MenuItem): Boolean {
+    startActivity(Intent(this, SettingsActivity::class.java))
+    return true
+  }
+
   override fun onResume() {
     super.onResume()
     disposableBag.add(adapter.observe(scannedDevices()))
 
     disposableBag.add(viewModel
-                          .state
-                          .observeOn(AndroidSchedulers.mainThread())
-                          .subscribe({
-                                       when (it) {
-                                         is State.BluetoothNotEnabled -> showBluetoothDisableSnackbar()
-                                         is State.BluetoothNotAvailable -> showBluetoothNotAvailableSnackbar()
-                                         is State.LocationPermissionNotGranted -> showLocationPermissionNotGrantedSnackbar()
-                                         is State.LocationServicesNotEnabled -> showLocationServiceNotEnabledSnackbar()
-                                       }
-                                     }, { it.printStackTrace() })
+      .state
+      .observeOn(AndroidSchedulers.mainThread())
+      .subscribe({
+        when (it) {
+          is State.BluetoothNotEnabled -> showBluetoothDisableSnackbar()
+          is State.BluetoothNotAvailable -> showBluetoothNotAvailableSnackbar()
+          is State.LocationPermissionNotGranted -> showLocationPermissionNotGrantedSnackbar()
+          is State.LocationServicesNotEnabled -> showLocationServiceNotEnabledSnackbar()
+        }
+      }, { it.printStackTrace() })
     )
   }
 
@@ -160,14 +200,14 @@ class ScanActivity : AppCompatActivity() {
   }
 
   private fun scannedDevices() =
-      viewModel
-          .state
-          .filter { it is State.BluetoothReady }
-          .map {
-            (it as State.BluetoothReady)
-                .devices
-          }
-          .observeOn(AndroidSchedulers.mainThread())
+    viewModel
+      .state
+      .filter { it is State.BluetoothReady }
+      .map {
+        (it as State.BluetoothReady)
+          .devices
+      }
+      .observeOn(AndroidSchedulers.mainThread())
 
   private fun showBluetoothDisableSnackbar() {
     shortSnackbar("Bluetooth is disabled!")
@@ -194,14 +234,14 @@ class ScanActivity : AppCompatActivity() {
   private fun onRefreshListener() {
     viewModel.sendCommand(Command.Refresh)
     Observable.timer(2, TimeUnit.SECONDS)
-        .observeOn(AndroidSchedulers.mainThread())
-        .subscribe { swipe_refresh_layout.isRefreshing = false }
+      .observeOn(AndroidSchedulers.mainThread())
+      .subscribe { swipe_refresh_layout.isRefreshing = false }
   }
 
   private fun shortSnackbar(message: String) {
     Snackbar
-        .make(scanning_linear_layout, message, Snackbar.LENGTH_LONG)
-        .show()
+      .make(scanning_linear_layout, message, Snackbar.LENGTH_LONG)
+      .show()
   }
 
 }

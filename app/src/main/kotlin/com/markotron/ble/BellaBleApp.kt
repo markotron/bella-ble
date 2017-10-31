@@ -10,7 +10,7 @@ import io.fabric.sdk.android.Fabric
  */
 class BellaBleApp : Application() {
 
-  lateinit var bleClient : RxBleClient
+  lateinit var bleClient: RxBleClient
 
   override fun onCreate() {
     super.onCreate()

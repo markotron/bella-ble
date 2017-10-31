@@ -22,7 +22,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".device.DeviceActivity"></activity>
+        <activity android:name=".device.DeviceActivity" />
+        <activity android:name=".settings.SettingsActivity" />
         <meta-data
             android:name="io.fabric.ApiKey"
             android:value="ee469b33d43f7fc0914459d75930c9ec280e5dd9" />

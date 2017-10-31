@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="scan_filter_entries">
+        <item>Springs</item>
+        <item>Leafs</item>
+        <item>Springs and Leafs</item>
+    </string-array>
+    <string-array name="scan_filter_value">
+        <item>SPRING</item>
+        <item>LEAF</item>
+        <item>SPRING_LEAF</item>
+    </string-array>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ListPreference
+        android:defaultValue="SPRING_LEAF"
+        android:entries="@array/scan_filter_entries"
+        android:entryValues="@array/scan_filter_value"
+        android:key="device_types_to_scan"
+        android:summary="Select which Bellabeat devices you want to filter"
+        android:title="Filter devices" />
+
+
+</PreferenceScreen>

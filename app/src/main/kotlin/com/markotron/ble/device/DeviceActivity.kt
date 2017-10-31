@@ -55,25 +55,25 @@ class DeviceActivity : AppCompatActivity() {
     }
 
     disposableBag.add(
-        commandExecutor
-            .connectionState()
-            .observeOn(mainThread())
-            .subscribe(::showStatusAndEnableButton, ::printStacktraceAndFinish)
+      commandExecutor
+        .connectionState()
+        .observeOn(mainThread())
+        .subscribe(::showStatusAndEnableButton, ::printStacktraceAndFinish)
     )
 
     disposableBag.add(
-        commandExecutor
-            .responses()
-            .observeOn(mainThread())
-            .subscribe(::showResponse, ::printStacktraceAndFinish)
+      commandExecutor
+        .responses()
+        .observeOn(mainThread())
+        .subscribe(::showResponse, ::printStacktraceAndFinish)
     )
 
     RxView
-        .clicks(send_button)
-        .subscribe {
-          val request = device_request_tv.text.toString()
-          commandExecutor.sendRequest(request)
-        }
+      .clicks(send_button)
+      .subscribe {
+        val request = device_request_tv.text.toString()
+        commandExecutor.sendRequest(request)
+      }
   }
 
   override fun onStop() {

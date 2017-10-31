@@ -72,10 +72,10 @@ class ScanResultAdapter(val onClick: (String) -> Unit) : RecyclerView.Adapter<Sc
   private var data: List<ScanResult> = listOf()
 
   fun observe(observableData: Observable<List<ScanResult>>): Subscription =
-      observableData.subscribe({
-                                 data = it
-                                 notifyDataSetChanged()
-                               }, { it.printStackTrace() })
+    observableData.subscribe({
+      data = it
+      notifyDataSetChanged()
+    }, { it.printStackTrace() })
 
   override fun getItemCount() = data.size
 
@@ -92,10 +92,10 @@ class ScanResultAdapter(val onClick: (String) -> Unit) : RecyclerView.Adapter<Sc
     holder.view.setRssi(scanResult.rssi)
     holder.view.setMacAddress(scanResult.bleDevice.macAddress)
     holder.view.setBackgroundColor(ContextCompat.getColor(holder.view.context,
-                                                          if (position % 2 == 0)
-                                                            R.color.lightBlue
-                                                          else
-                                                            R.color.white
+      if (position % 2 == 0)
+        R.color.lightBlue
+      else
+        R.color.white
     ))
     holder.view.setOnClickListener {
       onClick(data[position].bleDevice.macAddress)
@@ -103,7 +103,7 @@ class ScanResultAdapter(val onClick: (String) -> Unit) : RecyclerView.Adapter<Sc
   }
 
   override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
-      ScanResultViewHolder(ScanResultView(
-          parent.context))
+    ScanResultViewHolder(ScanResultView(
+      parent.context))
 
 }
