@@ -20,13 +20,13 @@ import com.markotron.ble.settings.SettingsActivity
 import com.polidea.rxandroidble.RxBleClient.State.*
 import com.polidea.rxandroidble.scan.ScanResult
 import com.polidea.rxandroidble.scan.ScanSettings
+import io.reactivex.Observable
+import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.functions.Function
+import io.reactivex.subjects.PublishSubject
+import io.reactivex.subjects.ReplaySubject
 import kotlinx.android.synthetic.main.activity_scanning.*
-import rx.Emitter
-import rx.Observable
-import rx.android.schedulers.AndroidSchedulers
-import rx.subjects.PublishSubject
-import rx.subjects.ReplaySubject
-import rx.subscriptions.CompositeSubscription
 import java.util.concurrent.TimeUnit
 
 sealed class State {
@@ -86,36 +86,42 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         if (s is State.BluetoothReady)
           devices
             .filter { filterOnlySelectedDevices(it.bleDevice.name, s.filter) }
-            .onErrorResumeNext { logErrorAndComplete("Error while scanning!", it) }
+            .onErrorResumeNext(Function { logErrorAndComplete("Error while scanning!", it) })
         else Observable.empty()
       }
       .map { Command.NewScanResult(it) }
 
-  private fun bleStateFeedback() = bleClient
-    .observeStateChanges()
-    .startWith(Observable.fromCallable { bleClient.state })
-    .distinctUntilChanged()
-    .map {
-      when (it) {
-        READY -> Command.SetBleState(State.BluetoothReady(listOf()))
-        BLUETOOTH_NOT_AVAILABLE -> Command.SetBleState(State.BluetoothNotAvailable)
-        LOCATION_PERMISSION_NOT_GRANTED -> Command.SetBleState(State.LocationPermissionNotGranted)
-        LOCATION_SERVICES_NOT_ENABLED -> Command.SetBleState(State.LocationServicesNotEnabled)
-        BLUETOOTH_NOT_ENABLED -> Command.SetBleState(State.BluetoothNotEnabled)
-        null -> throw RuntimeException("The bluetooth state enum is null!")
-      }
+  private fun bleStateFeedback() =
+    Observable.defer {
+      bleClient
+        .observeStateChanges()
+        .startWith(bleClient.state)
+        .distinctUntilChanged()
+        .map {
+          when (it) {
+            READY -> Command.SetBleState(State.BluetoothReady(listOf()))
+            BLUETOOTH_NOT_AVAILABLE -> Command.SetBleState(State.BluetoothNotAvailable)
+            LOCATION_PERMISSION_NOT_GRANTED -> Command.SetBleState(State.LocationPermissionNotGranted)
+            LOCATION_SERVICES_NOT_ENABLED -> Command.SetBleState(State.LocationServicesNotEnabled)
+            BLUETOOTH_NOT_ENABLED -> Command.SetBleState(State.BluetoothNotEnabled)
+            null -> throw RuntimeException("The bluetooth state enum is null!")
+          }
+        }
     }
 
-  private fun filterFeedback() = Observable.create<Command>({ emitter ->
+  init {
+  }
+
+  private fun filterFeedback() = Observable.create<Command> { emitter ->
     val listener: (SharedPreferences, String) -> Unit = { sp, k ->
       if (k == "device_types_to_scan")
         emitter.onNext(Command.Filter(sp.getString(k, "")))
     }
     prefs.registerOnSharedPreferenceChangeListener(listener)
-    emitter.setCancellation {
+    emitter.setCancellable {
       prefs.unregisterOnSharedPreferenceChangeListener(listener)
     }
-  }, Emitter.BackpressureMode.NONE)
+  }
     .startWith(Observable.fromCallable<Command> {
       Command.Filter(prefs.getString("device_types_to_scan", ""))
     })
@@ -151,7 +157,7 @@ class ScanActivity : AppCompatActivity() {
   lateinit var adapter: ScanResultAdapter
   lateinit var viewModel: ScanViewModel
 
-  private val disposableBag = CompositeSubscription()
+  private val disposableBag = CompositeDisposable()
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)

@@ -38,10 +38,11 @@ dependencies {
     compile 'com.android.support.constraint:constraint-layout:1.0.2'
     compile 'com.polidea.rxandroidble:rxandroidble:1.4.1'
     compile 'com.android.support:recyclerview-v7:26.+'
-    compile 'io.reactivex:rxandroid:1.2.1'
-    compile 'com.jakewharton.rxbinding:rxbinding:1.0.1'
+    compile 'io.reactivex.rxjava2:rxandroid:2.0.1'
+    compile 'com.jakewharton.rxbinding2:rxbinding:2.0.0'
     compile 'android.arch.lifecycle:extensions:1.0.0-rc1'
     testCompile 'junit:junit:4.12'
+    compile "com.github.akarnokd:rxjava2-interop:0.11.2"
 
     compile('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
         transitive = true

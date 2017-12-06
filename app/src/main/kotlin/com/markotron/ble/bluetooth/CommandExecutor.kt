@@ -2,11 +2,11 @@ package com.markotron.ble.bluetooth
 
 import android.util.Log
 import com.polidea.rxandroidble.RxBleConnection
-import com.polidea.rxandroidble.RxBleDevice
 import com.polidea.rxandroidble.exceptions.BleDisconnectedException
-import rx.Observable
-import rx.subjects.PublishSubject
-import rx.subjects.ReplaySubject
+import io.reactivex.Observable
+import io.reactivex.functions.Function
+import io.reactivex.subjects.PublishSubject
+import io.reactivex.subjects.ReplaySubject
 import java.nio.charset.Charset
 import java.util.UUID.fromString
 
@@ -15,19 +15,19 @@ val CHARACTERISTIC_TX = fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
 
 sealed class State {
   data class NotConnected(val retryNo: Int = 0) : State()
-  data class Connected(val connection: RxBleConnection,
+  data class Connected(val connection: BleConnection,
                        val request: String? = null,
                        val response: String? = null) : State()
 }
 
 sealed class Command {
-  data class Connected(val connection: RxBleConnection) : Command()
+  data class Connected(val connection: BleConnection) : Command()
   object Disconnected : Command()
   data class SendRequest(val data: String) : Command()
   data class Response(val data: String) : Command()
 }
 
-class CommandExecutor(private val device: RxBleDevice) {
+class CommandExecutor(private val device: BleDevice) {
 
   private val commands = PublishSubject.create<Command>()
   private val replay = ReplaySubject.createWithSize<State>(1)
@@ -65,16 +65,16 @@ class CommandExecutor(private val device: RxBleDevice) {
       .filter { it is State.NotConnected }
       .switchMap { s ->
         device
-          .establishConnection(false)
+          .establishConnection()
           .map<Command> { Command.Connected(it) }
-          .onErrorResumeNext {
+          .onErrorResumeNext(Function {
             if (it is BleDisconnectedException) {
               Log.w("BLE DISCONNECTED", it)
               if ((s as State.NotConnected).retryNo < 3)
                 Observable.just(Command.Disconnected)
               else Observable.error(it)
             } else Observable.error(it)
-          }
+          })
       }
 
   private fun requestFeedback(state: Observable<State>): Observable<Command> =
@@ -86,7 +86,7 @@ class CommandExecutor(private val device: RxBleDevice) {
           s
             .connection
             .writeCharacteristic(CHARACTERISTIC_RX, it.toByteArray())
-            .toCompletable()
+            .ignoreElements()
             .andThen(Observable.empty<Command>())
         } ?: Observable.empty<Command>()
       }
@@ -103,10 +103,10 @@ class CommandExecutor(private val device: RxBleDevice) {
             .flatMap { it }
             .map { String(it, Charset.forName("US-ASCII")) }
             .map { Command.Response(it) }
-            .onErrorResumeNext {
+            .onErrorResumeNext(Function {
               Log.w("SETUP NOTIFICATION", it)
               Observable.empty()
-            }
+            })
         } else Observable.empty<Command>()
       }
 

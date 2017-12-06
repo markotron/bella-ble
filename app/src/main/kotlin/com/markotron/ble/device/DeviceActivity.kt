@@ -3,24 +3,24 @@ package com.markotron.ble.device
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
 import android.view.View
-import com.jakewharton.rxbinding.view.RxView
+import com.jakewharton.rxbinding2.view.RxView
 import com.markotron.ble.BellaBleApp
 import com.markotron.ble.R
+import com.markotron.ble.bluetooth.BleClient
+import com.markotron.ble.bluetooth.BleDevice
 import com.markotron.ble.bluetooth.CommandExecutor
-import com.polidea.rxandroidble.RxBleClient
 import com.polidea.rxandroidble.RxBleConnection
-import com.polidea.rxandroidble.RxBleDevice
+import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
+import io.reactivex.disposables.CompositeDisposable
 import kotlinx.android.synthetic.main.activity_device.*
-import rx.android.schedulers.AndroidSchedulers.mainThread
-import rx.subscriptions.CompositeSubscription
 
 class DeviceActivity : AppCompatActivity() {
 
-  lateinit var device: RxBleDevice
-  lateinit var bleClient: RxBleClient
+  lateinit var device: BleDevice
+  lateinit var bleClient: BleClient
   lateinit var commandExecutor: CommandExecutor
 
-  val disposableBag = CompositeSubscription()
+  val disposableBag = CompositeDisposable()
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)

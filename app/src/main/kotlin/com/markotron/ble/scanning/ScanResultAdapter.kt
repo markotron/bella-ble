@@ -12,9 +12,9 @@ import com.markotron.ble.R
 import android.util.AttributeSet
 import android.view.ViewGroup
 import com.polidea.rxandroidble.scan.ScanResult
+import io.reactivex.Observable
+import io.reactivex.disposables.Disposable
 import kotlinx.android.synthetic.main.view_scan_result.view.*
-import rx.Observable
-import rx.Subscription
 
 /**
  * Created by markotron on 26/10/2017.
@@ -71,7 +71,7 @@ class ScanResultAdapter(val onClick: (String) -> Unit) : RecyclerView.Adapter<Sc
 
   private var data: List<ScanResult> = listOf()
 
-  fun observe(observableData: Observable<List<ScanResult>>): Subscription =
+  fun observe(observableData: Observable<List<ScanResult>>): Disposable =
     observableData.subscribe({
       data = it
       notifyDataSetChanged()
