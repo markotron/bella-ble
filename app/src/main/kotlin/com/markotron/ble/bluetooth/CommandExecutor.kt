@@ -4,9 +4,9 @@ import android.util.Log
 import com.polidea.rxandroidble.RxBleConnection
 import com.polidea.rxandroidble.exceptions.BleDisconnectedException
 import io.reactivex.Observable
-import io.reactivex.functions.Function
 import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.ReplaySubject
+import org.notests.sharedsequence.*
 import java.nio.charset.Charset
 import java.util.UUID.fromString
 
@@ -18,6 +18,8 @@ sealed class State {
   data class Connected(val connection: BleConnection,
                        val request: String? = null,
                        val response: String? = null) : State()
+
+  data class Error(val error: Throwable) : State()
 }
 
 sealed class Command {
@@ -25,6 +27,7 @@ sealed class Command {
   object Disconnected : Command()
   data class SendRequest(val data: String) : Command()
   data class Response(val data: String) : Command()
+  data class Error(val error: Throwable) : Command()
 }
 
 class CommandExecutor(private val device: BleDevice) {
@@ -32,91 +35,100 @@ class CommandExecutor(private val device: BleDevice) {
   private val commands = PublishSubject.create<Command>()
   private val replay = ReplaySubject.createWithSize<State>(1)
 
-  private val state = Observable.merge(
-    commands,
-    connectFeedback(replay),
-    requestFeedback(replay),
-    responseFeedback(replay)
+  private val state = Signal.merge(listOf(
+    commands.asSignal(Signal.empty()),
+    connectFeedback(replay.asSignal(Signal.empty())),
+    requestFeedback(replay.asSignal(Signal.empty())),
+    responseFeedback(replay.asSignal(Signal.empty())))
   )
     .doOnNext { Log.d("COMMAND", it.toString()) }
-    .scan<State>(State.NotConnected()) { s, c ->
+    .scan<Command, State>(State.NotConnected()) { s, c ->
       when (c) {
         is Command.Connected -> State.Connected(c.connection)
         is Command.Disconnected -> when (s) {
           is State.NotConnected -> s.copy(s.retryNo + 1)
           is State.Connected -> State.NotConnected()
+          is State.Error -> State.Error(s.error)
         }
         is Command.SendRequest -> when (s) {
           is State.Connected -> s.copy(request = c.data, response = null)
           is State.NotConnected -> State.NotConnected()
+          is State.Error -> State.Error(s.error)
         }
         is Command.Response -> when (s) {
           is State.Connected -> s.copy(request = null, response = c.data)
           is State.NotConnected -> State.NotConnected()
+          is State.Error -> State.Error(s.error)
         }
+        is Command.Error -> State.Error(c.error)
       }
     }
     .doOnNext { Log.d("STATE", it.toString()) }
     .doOnNext { replay.onNext(it) }
-    .share()
+//    .share()
 
-  private fun connectFeedback(state: Observable<State>): Observable<Command> =
+  private fun connectFeedback(state: Signal<State>): Signal<Command> =
     state
       .filter { it is State.NotConnected }
-      .switchMap { s ->
+      .switchMapSignal { s ->
         device
           .establishConnection()
           .map<Command> { Command.Connected(it) }
-          .onErrorResumeNext(Function {
-            if (it is BleDisconnectedException) {
-              Log.w("BLE DISCONNECTED", it)
-              if ((s as State.NotConnected).retryNo < 3)
-                Observable.just(Command.Disconnected)
-              else Observable.error(it)
-            } else Observable.error(it)
-          })
+          .asSignal {
+            when(it) {
+              is BleDisconnectedException -> {
+                Log.w("BLE DISCONNECTED", it)
+                if ((s as State.NotConnected).retryNo < 3)
+                  Signal.just<Command>(Command.Disconnected)
+                else Signal.just<Command>(Command.Error(it))
+              }
+              else -> Signal.just(Command.Error(it))
+            }
+          }
       }
 
-  private fun requestFeedback(state: Observable<State>): Observable<Command> =
+  private fun requestFeedback(state: Signal<State>): Signal<Command> =
     state
       .filter { it is State.Connected && it.request != null && it.response == null }
       .map { it as State.Connected }
-      .flatMap { s ->
+      .flatMapSignal { s ->
         s.request?.let {
           s
             .connection
             .writeCharacteristic(CHARACTERISTIC_RX, it.toByteArray())
             .ignoreElements()
             .andThen(Observable.empty<Command>())
-        } ?: Observable.empty<Command>()
+            .asSignal(Signal.empty())
+        } ?: Signal.empty<Command>()
       }
 
-  private fun responseFeedback(state: Observable<State>): Observable<Command> =
+  private fun responseFeedback(state: Signal<State>): Signal<Command> =
     state
       .distinctUntilChanged { s -> s is State.Connected }
-      .switchMap {
+      .switchMapSignal<State, Command> {
         if (it is State.Connected) {
           it
             .connection
             .setupNotification(CHARACTERISTIC_TX)
+            .asSignal(Signal.empty())
             .doOnNext { Log.d("NOTIFICATIONS", it.toString()) }
-            .flatMap { it }
+            .flatMapSignal { it.asSignal(Signal.empty()) }
             .map { String(it, Charset.forName("US-ASCII")) }
             .map { Command.Response(it) }
-            .onErrorResumeNext(Function {
-              Log.w("SETUP NOTIFICATION", it)
-              Observable.empty()
-            })
-        } else Observable.empty<Command>()
+        } else Signal.empty()
       }
 
-  fun responses(): Observable<String> = state
+  fun responses(): Signal<String> = state
     .filter { it is State.Connected && it.response != null }
     .map { (it as State.Connected).response ?: throw RuntimeException() }
 
+  fun errors(): Signal<Throwable> = state
+    .filter { it is State.Error }
+    .map { (it as State.Error).error }
+
   fun sendRequest(request: String) = commands.onNext(Command.SendRequest(request))
 
-  fun connectionState(): Observable<RxBleConnection.RxBleConnectionState> =
-    device.observeConnectionStateChanges()
+  fun connectionState(): Signal<RxBleConnection.RxBleConnectionState> =
+    device.observeConnectionStateChanges().asSignal(Signal.empty())
 
 }
