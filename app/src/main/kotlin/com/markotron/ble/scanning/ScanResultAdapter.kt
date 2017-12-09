@@ -15,6 +15,8 @@ import com.polidea.rxandroidble.scan.ScanResult
 import io.reactivex.Observable
 import io.reactivex.disposables.Disposable
 import kotlinx.android.synthetic.main.view_scan_result.view.*
+import org.notests.sharedsequence.Driver
+import org.notests.sharedsequence.drive
 
 /**
  * Created by markotron on 26/10/2017.
@@ -71,11 +73,11 @@ class ScanResultAdapter(val onClick: (String) -> Unit) : RecyclerView.Adapter<Sc
 
   private var data: List<ScanResult> = listOf()
 
-  fun observe(observableData: Observable<List<ScanResult>>): Disposable =
-    observableData.subscribe({
+  fun observe(observableData: Driver<List<ScanResult>>): Disposable =
+    observableData.drive {
       data = it
       notifyDataSetChanged()
-    }, { it.printStackTrace() })
+    }
 
   override fun getItemCount() = data.size
 

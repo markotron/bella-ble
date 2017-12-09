@@ -23,10 +23,10 @@ import com.polidea.rxandroidble.scan.ScanSettings
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.functions.Function
 import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.ReplaySubject
 import kotlinx.android.synthetic.main.activity_scanning.*
+import org.notests.sharedsequence.*
 import java.util.concurrent.TimeUnit
 
 sealed class State {
@@ -56,10 +56,10 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
   private val prefs = PreferenceManager.getDefaultSharedPreferences(app)
 
   // API
-  val state: Observable<State> = Observable
-    .merge(commands, scanningFeedback(replay), bleStateFeedback(), filterFeedback())
+  val state: Driver<State> = Driver
+    .merge(listOf(commands.asDriver(Driver.empty()), scanningFeedback(replay.asDriver(Driver.empty())), bleStateFeedback(), filterFeedback()))
     .doOnNext { Log.d("COMMAND", it.toString()) }
-    .scan<State>(State.Start) { state, command ->
+    .scan<Command, State>(State.Start) { state, command ->
       when (command) {
         is Command.Refresh ->
           (state as? State.BluetoothReady)?.copy(devices = listOf()) ?: state
@@ -73,28 +73,29 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     }
     .doOnNext { replay.onNext(it) }
     .doOnNext { Log.d("STATE", it.toString()) }
-    .replay(1)
-    .refCount()
+//    .replay(1)
+//    .refCount()
 
   fun sendCommand(c: Command) = commands.onNext(c)
 
   // FEEDBACKS
-  private fun scanningFeedback(state: Observable<State>) =
+  private fun scanningFeedback(state: Driver<State>) =
     state
       .distinctUntilChanged { s -> (s as? State.BluetoothReady)?.filter ?: "" }
-      .switchMap { s ->
+      .switchMapDriver { s ->
         if (s is State.BluetoothReady)
           devices
+            .asDriver { logErrorAndComplete("Error while scanning!", it) }
             .filter { filterOnlySelectedDevices(it.bleDevice.name, s.filter) }
-            .onErrorResumeNext(Function { logErrorAndComplete("Error while scanning!", it) })
-        else Observable.empty()
+        else Driver.empty()
       }
       .map { Command.NewScanResult(it) }
 
   private fun bleStateFeedback() =
-    Observable.defer {
+    Driver.defer {
       bleClient
         .observeStateChanges()
+        .asDriver(Driver.empty())
         .startWith(bleClient.state)
         .distinctUntilChanged()
         .map {
@@ -109,9 +110,6 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-  init {
-  }
-
   private fun filterFeedback() = Observable.create<Command> { emitter ->
     val listener: (SharedPreferences, String) -> Unit = { sp, k ->
       if (k == "device_types_to_scan")
@@ -125,6 +123,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     .startWith(Observable.fromCallable<Command> {
       Command.Filter(prefs.getString("device_types_to_scan", ""))
     })
+    .asDriver(Driver.empty())
 
   // HELPERS
   private fun updateScanResultList(currentResults: List<ScanResult>, newResult: ScanResult) =
@@ -134,9 +133,9 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
       .plus(newResult)
       .sortedByDescending { it.rssi }
 
-  private fun logErrorAndComplete(msg: String, t: Throwable): Observable<ScanResult> {
+  private fun logErrorAndComplete(msg: String, t: Throwable): Driver<ScanResult> {
     Log.d("SCAN VIEW MODEL", msg, t)
-    return Observable.empty()
+    return Driver.empty()
   }
 
   private fun filterOnlySelectedDevices(name: String?, selection: String): Boolean {
@@ -154,8 +153,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
 class ScanActivity : AppCompatActivity() {
 
-  lateinit var adapter: ScanResultAdapter
-  lateinit var viewModel: ScanViewModel
+  private lateinit var adapter: ScanResultAdapter
+  private lateinit var viewModel: ScanViewModel
 
   private val disposableBag = CompositeDisposable()
 
@@ -188,15 +187,14 @@ class ScanActivity : AppCompatActivity() {
 
     disposableBag.add(viewModel
       .state
-      .observeOn(AndroidSchedulers.mainThread())
-      .subscribe({
+      .drive {
         when (it) {
           is State.BluetoothNotEnabled -> showBluetoothDisableSnackbar()
           is State.BluetoothNotAvailable -> showBluetoothNotAvailableSnackbar()
           is State.LocationPermissionNotGranted -> showLocationPermissionNotGrantedSnackbar()
           is State.LocationServicesNotEnabled -> showLocationServiceNotEnabledSnackbar()
         }
-      }, { it.printStackTrace() })
+      }
     )
   }
 
@@ -213,7 +211,6 @@ class ScanActivity : AppCompatActivity() {
         (it as State.BluetoothReady)
           .devices
       }
-      .observeOn(AndroidSchedulers.mainThread())
 
   private fun showBluetoothDisableSnackbar() {
     shortSnackbar("Bluetooth is disabled!")
