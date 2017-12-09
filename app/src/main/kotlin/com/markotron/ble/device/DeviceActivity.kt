@@ -57,15 +57,22 @@ class DeviceActivity : AppCompatActivity() {
     disposableBag.add(
       commandExecutor
         .connectionState()
-        .observeOn(mainThread())
-        .subscribe(::showStatusAndEnableButton, ::printStacktraceAndFinish)
+        .asObservable()
+        .subscribe(::showStatusAndEnableButton)
     )
 
     disposableBag.add(
       commandExecutor
         .responses()
-        .observeOn(mainThread())
-        .subscribe(::showResponse, ::printStacktraceAndFinish)
+        .asObservable()
+        .subscribe(::showResponse)
+    )
+
+    disposableBag.add(
+      commandExecutor
+        .errors()
+        .asObservable()
+        .subscribe(::printStacktraceAndFinish)
     )
 
     RxView
