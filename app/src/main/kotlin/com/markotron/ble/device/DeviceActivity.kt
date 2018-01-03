@@ -9,6 +9,7 @@ import com.markotron.ble.R
 import com.markotron.ble.bluetooth.BleClient
 import com.markotron.ble.bluetooth.BleDevice
 import com.markotron.ble.bluetooth.CommandExecutor
+import com.markotron.ble.bluetooth.SimpleCommandExecutor
 import com.polidea.rxandroidble.RxBleConnection
 import io.reactivex.android.schedulers.AndroidSchedulers.mainThread
 import io.reactivex.disposables.CompositeDisposable
@@ -18,7 +19,7 @@ class DeviceActivity : AppCompatActivity() {
 
   lateinit var device: BleDevice
   lateinit var bleClient: BleClient
-  lateinit var commandExecutor: CommandExecutor
+  lateinit var commandExecutor: SimpleCommandExecutor
 
   val disposableBag = CompositeDisposable()
 
@@ -29,7 +30,7 @@ class DeviceActivity : AppCompatActivity() {
     val macAddress = intent.extras.getString("macAddress")
     bleClient = (application as BellaBleApp).bleClient
     device = bleClient.getBleDevice(macAddress)
-    commandExecutor = CommandExecutor(device)
+    commandExecutor = SimpleCommandExecutor(device)
 
     if (device.name == null) finish()
     supportActionBar?.title = device.name

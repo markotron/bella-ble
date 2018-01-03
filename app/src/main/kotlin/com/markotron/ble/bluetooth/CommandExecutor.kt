@@ -7,6 +7,7 @@ import io.reactivex.Observable
 import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.ReplaySubject
 import org.notests.sharedsequence.*
+import org.notests.sharedsequence.api.debug
 import java.nio.charset.Charset
 import java.util.UUID.fromString
 
@@ -70,12 +71,18 @@ class CommandExecutor(private val device: BleDevice) {
   private fun connectFeedback(state: Signal<State>): Signal<Command> =
     state
       .filter { it is State.NotConnected }
+      .debug("After Connection Feedback") { Log.d("After", it) }
       .switchMapSignal { s ->
         device
+          // kada koristim Interop s observable-om koji nije establishConnection onda radi.
+          // Sljedeci korak je da pokusam rekreirati minimalan program koji ne radi i vidim zasto.
+          // Dakle, izbaci drivere, izbaci signale, sve izbaci. Samo zavrepaj library u rxjavu 2 i
+          // provjeri radi li ovaj switch map
           .establishConnection()
+          .debug("After Establish Connection") { Log.d("After", it) }
           .map<Command> { Command.Connected(it) }
           .asSignal {
-            when(it) {
+            when (it) {
               is BleDisconnectedException -> {
                 Log.w("BLE DISCONNECTED", it)
                 if ((s as State.NotConnected).retryNo < 3)

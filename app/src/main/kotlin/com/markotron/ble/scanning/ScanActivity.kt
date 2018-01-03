@@ -57,7 +57,12 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
 
   // API
   val state: Driver<State> = Driver
-    .merge(listOf(commands.asDriver(Driver.empty()), scanningFeedback(replay.asDriver(Driver.empty())), bleStateFeedback(), filterFeedback()))
+    .merge(listOf(
+      commands.asDriver(Driver.empty()),
+      scanningFeedback(replay.asDriver(Driver.empty())),
+      bleStateFeedback(),
+      filterFeedback())
+    )
     .doOnNext { Log.d("COMMAND", it.toString()) }
     .scan<Command, State>(State.Start) { state, command ->
       when (command) {
