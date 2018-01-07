@@ -5,12 +5,14 @@ import android.support.test.InstrumentationRegistry
 import android.support.test.runner.AndroidJUnit4
 import android.util.Log
 import hu.akarnokd.rxjava.interop.RxJavaInterop
+import io.reactivex.android.schedulers.AndroidSchedulers
 
 import org.junit.Test
 import org.junit.runner.RunWith
 
 import org.junit.Assert.*
 import org.notests.sharedsequence.*
+import org.notests.sharedsequence.api.debug
 import rx.Observable
 import java.util.concurrent.TimeUnit
 
@@ -81,5 +83,56 @@ class ExampleInstrumentedTest {
     subject.onNext(3)
     Thread.sleep(1000)
     subject.onNext(4)
+  }
+
+  @Test
+  fun testSignal2SwitchMap() {
+    val subject = io.reactivex.subjects.PublishSubject.create<Int>()
+    subject
+      .asSignal(Signal.empty())
+      .debug("Before switch map") { Log.d("TEST", it) }
+      .switchMapSignal { n ->
+        io.reactivex.Observable
+          .interval(100, TimeUnit.MILLISECONDS)
+          .debug("Signal after intreval") { Log.d("TEST", it) }
+          .asSignal(Signal.empty())
+          .map { n * it }
+          .debug("Signal after map") { Log.d("TEST", it) }
+      }
+      .asObservable().subscribe()
+
+    subject.onNext(2)
+    Thread.sleep(1000)
+    subject.onNext(3)
+    Thread.sleep(1000)
+    subject.onNext(4)
+  }
+
+  @Test
+  fun switchMapDispose() {
+    val subject = io.reactivex.subjects.PublishSubject.create<Int>()
+
+    subject
+      .share()
+      .filter { it >= 3 }
+      .debug("Before switch map") { println(it) }
+      .switchMap {
+        io.reactivex.Observable.error<Int>(RuntimeException())
+          .debug("After initial observable") { println(it) }
+          .onErrorReturnItem(1)
+          .debug("After onErrorReturnItem()") { println(it) }
+          .share()
+          .debug("After share()") { println(it) }
+          .subscribeOn(AndroidSchedulers.mainThread())
+          .observeOn(AndroidSchedulers.mainThread())
+      }
+      .subscribe()
+
+    subject.onNext(2)
+    Thread.sleep(200)
+    subject.onNext(3)
+    Thread.sleep(200)
+    subject.onNext(4)
+    Thread.sleep(1000)
   }
 }

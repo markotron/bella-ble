@@ -42,16 +42,19 @@ dependencies {
     compile 'com.jakewharton.rxbinding2:rxbinding:2.0.0'
     compile 'android.arch.lifecycle:extensions:1.0.0-rc1'
     testCompile 'junit:junit:4.12'
-    compile "com.github.akarnokd:rxjava2-interop:0.11.2"
-    compile 'org.notests:SharedSequence:0.1.5'
+    compile "com.github.akarnokd:rxjava2-interop:0.11.4"
+    compile 'org.notests:SharedSequence:0.1.6'
+    compile 'org.notests:SharedSequenceApi:0.1.6'
 
     compile('com.crashlytics.sdk.android:crashlytics:2.7.1@aar') {
         transitive = true
     }
+
 }
 repositories {
     mavenCentral()
     google()
     maven { url 'https://maven.fabric.io/public' }
+//    maven { url "https://jcenter.bintray.com" }
     maven { url "https://dl.bintray.com/markotron/maven" }
 }

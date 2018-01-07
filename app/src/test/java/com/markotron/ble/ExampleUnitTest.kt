@@ -8,6 +8,7 @@ import org.junit.Assert.*
 import org.notests.sharedsequence.*
 import org.notests.sharedsequence.api.debug
 import rx.Observable
+import rx.Subscriber
 import rx.schedulers.Schedulers
 import rx.subjects.PublishSubject
 import java.util.concurrent.TimeUnit
@@ -137,6 +138,123 @@ class ExampleUnitTest {
     subject.onNext(3)
     Thread.sleep(1000)
     subject.onNext(4)
+  }
+
+  @Test
+  fun disposingSharedSource() {
+
+    val subject = io.reactivex.subjects.PublishSubject.create<Int>()
+    val shared = subject.debug("Before share") { println(it) }.share().debug("After share") { println(it) }
+
+    val disp1 = shared
+      .subscribe()
+
+    Thread.sleep(3000)
+//    val disp2 = shared
+//      .subscribe()
+
+    shared
+      .map<Int> { throw RuntimeException() }
+      .onErrorReturnItem(1)
+      .subscribe()
+
+
+    disp1.dispose()
+    Thread.sleep(3000)
+
+//    disp2.dispose() Thread.sleep(3000)
+  }
+
+  @Test
+  fun doesMergeDisposeCompleted() {
+
+    val o1 = io.reactivex.Observable.just(1, 2, 3).debug("O1") { println(it) }
+    val o2 = io.reactivex.Observable.just(4, 5, 6).debug("O2") { println(it) }
+
+    io.reactivex.Observable.merge(o1, o2).subscribe()
+  }
+
+  @Test
+  fun switchMapDispose() {
+    val subject = io.reactivex.subjects.PublishSubject.create<Int>()
+
+    subject
+      .share()
+      .filter { it >= 3 }
+      .debug("Before switch map") { println(it) }
+      .switchMap {
+        io.reactivex.Observable.error<Int>(RuntimeException())
+          .debug("After initial observable") { println(it) }
+          .share()
+          .debug("After share()") { println(it) }
+          .onErrorReturnItem(1)
+          .debug("After onErrorReturnItem()") { println(it) }
+          .subscribeOn(io.reactivex.schedulers.Schedulers.single())
+          .observeOn(io.reactivex.schedulers.Schedulers.single())
+      }
+      .subscribe()
+
+    subject.onNext(2)
+    Thread.sleep(200)
+    subject.onNext(3)
+    Thread.sleep(200)
+    subject.onNext(4)
+    Thread.sleep(1000)
+  }
+
+  @Test
+  fun completedSharedSequence() {
+
+    val subject = io.reactivex.subjects.PublishSubject.create<Int>()
+
+
+
+    subject
+      .debug("Before share") { println(it) }
+      .onErrorResumeNext(io.reactivex.Observable.just(8))
+      .share()
+      .debug("After share") { println(it) }
+      .subscribe()
+
+
+    subject.onNext(1)
+    subject.onNext(1)
+    subject.onNext(1)
+    subject.onNext(1)
+    subject.onError(RuntimeException())
+  }
+
+  @Test
+  fun unsafeSubscribeV1() {
+    Observable
+      .error<Int>(RuntimeException())
+      .doOnSubscribe { println("SUBSCRIBE") }
+      .doOnNext { println("NEXT: $it") }
+      .doOnCompleted { println("COMPLETED") }
+      .doOnUnsubscribe { println("UNSUBSCRIBED") }
+      .doOnError { println("ERROR: $it") }
+//      .subscribe(object : Subscriber<Int>() {
+//        override fun onError(e: Throwable?) {
+//        }
+//
+//        override fun onCompleted() {
+//        }
+//
+//        override fun onNext(t: Int?) {
+//        }
+//
+//      })
+      .unsafeSubscribe(object : Subscriber<Int>() {
+        override fun onNext(t: Int?) {
+        }
+
+        override fun onError(e: Throwable) {
+        }
+
+        override fun onCompleted() {
+        }
+
+      })
   }
 
 }

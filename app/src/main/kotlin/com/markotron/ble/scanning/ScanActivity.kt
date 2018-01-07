@@ -63,7 +63,6 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
       bleStateFeedback(),
       filterFeedback())
     )
-    .doOnNext { Log.d("COMMAND", it.toString()) }
     .scan<Command, State>(State.Start) { state, command ->
       when (command) {
         is Command.Refresh ->
@@ -77,9 +76,6 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
       }
     }
     .doOnNext { replay.onNext(it) }
-    .doOnNext { Log.d("STATE", it.toString()) }
-//    .replay(1)
-//    .refCount()
 
   fun sendCommand(c: Command) = commands.onNext(c)
 
