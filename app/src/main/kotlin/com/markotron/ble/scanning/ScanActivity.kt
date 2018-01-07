@@ -58,8 +58,8 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
   // API
   val state: Driver<State> = Driver
     .merge(listOf(
-      commands.asDriver(Driver.empty()),
-      scanningFeedback(replay.asDriver(Driver.empty())),
+      commands.asDriverCompleteOnError(),
+      scanningFeedback(replay.asDriverCompleteOnError()),
       bleStateFeedback(),
       filterFeedback())
     )
@@ -96,7 +96,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     Driver.defer {
       bleClient
         .observeStateChanges()
-        .asDriver(Driver.empty())
+        .asDriverCompleteOnError()
         .startWith(bleClient.state)
         .distinctUntilChanged()
         .map {
@@ -124,7 +124,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     .startWith(Observable.fromCallable<Command> {
       Command.Filter(prefs.getString("device_types_to_scan", ""))
     })
-    .asDriver(Driver.empty())
+    .asDriverCompleteOnError()
 
   // HELPERS
   private fun updateScanResultList(currentResults: List<ScanResult>, newResult: ScanResult) =

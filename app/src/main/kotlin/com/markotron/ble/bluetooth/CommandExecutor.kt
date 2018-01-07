@@ -73,14 +73,14 @@ class CommandExecutor(private val device: BleDevice) {
         device
           .establishConnection()
           .map<Command> { Command.Connected(it) }
-          .asSignal {
+          .asSignalReturnOnError<Command> {
             when (it) {
               is BleDisconnectedException -> {
                 if ((s as State.NotConnected).retryNo < 3)
-                  Signal.just<Command>(Command.Disconnected)
-                else Signal.just<Command>(Command.Error(it))
+                  Command.Disconnected
+                else Command.Error(it)
               }
-              else -> Signal.just(Command.Error(it))
+              else -> Command.Error(it)
             }
           }
       }
