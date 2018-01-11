@@ -138,7 +138,7 @@ In the activity's `onResume` we subscribe to the state machine and update the UI
 
 It's completely understandable if you're confused. I'll try to illustrate this example with a picture.
 
-![State machine example](https://drive.google.com/file/d/1AhOdEvpKeUO_xmqHE1LeaG_CNIcHC_fh/view?usp=sharing)
+![State machine example](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
  
 
 
