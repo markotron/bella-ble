@@ -138,7 +138,7 @@ In the activity's `onResume` we subscribe to the state machine and update the UI
 
 It's completely understandable if you're confused. I'll try to illustrate this example with a picture.
 
-![State machine example 1](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
+![State machine example 1](https://github.com/markotron/bella-ble/blob/master/app/src/main/res/mipmap-hdpi/BellaBleFeedback1.png?raw=true)
  
 When we subscribe to the state machine, it emits the first state - `StartScanning`. Every side-effect
 observes the output state of the state-transitioning function, reacts on it, creates zero, one or more
@@ -146,7 +146,7 @@ commands and feeds them back to the function. As you can see, this side-effects 
 common in our architectures that we named them **feedback loops** or simply **feedbacks**. With this 
 new terminology, our state machine looks like this:
  
-![State machine example 2](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
+![State machine example 2](https://github.com/markotron/bella-ble/blob/master/app/src/main/res/mipmap-hdpi/BellaBleFeedback2.png?raw=true)
 
 Note that, in this general form, seems like all feedbacks react when a state changes. That's usually 
 true, but sometimes it's enough to implement a simpler version. We can simply ignore the state and 
@@ -155,7 +155,7 @@ We don't have to wait for the `State.StartScanning` to arrive, because that's th
 will arrive as soon as we subscribe. Instead, we ignore the feedback's input state and start
 emitting the Bluetooth state commands as soon as we subscribe. Something like this:
 
-![State machine example 3](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
+![State machine example 3](https://github.com/markotron/bella-ble/blob/master/app/src/main/res/mipmap-hdpi/BellaBleFeedback3.png?raw=true)
 
 Anyway, that's just a technicality. Conceptually, our state machine is fully described with a second
 picture. 
