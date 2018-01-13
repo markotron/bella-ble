@@ -1,5 +1,8 @@
-BellaBle
+Modeling the state with Drivers and state machines in Android apps
 ========
+
+Before reading this post, please read my [post](https://medium.com/@markotron/reducing-the-cognitive-load-with-drivers-5035c007366f)
+on [shared sequences](https://github.com/NoTests/SharedSequence.kt) to understand what *Drivers* and *Signals* are.
 
 *BellaBle* or *[Bellabeat](https://webshop.bellabeat.com/)* Bluetooth is a small application for inspecting 
 and debugging Bellabeat's devices.
