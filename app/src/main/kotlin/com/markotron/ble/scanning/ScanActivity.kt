@@ -66,14 +66,14 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     .scan<Command, State>(State.StartScanning) { state, command ->
       when (command) {
         is Command.Refresh ->
-          if(state is State.BluetoothReady) state.copy(devices = listOf()) else state
+          if (state is State.BluetoothReady) state.copy(devices = listOf()) else state
         is Command.SetBleState -> command.state
         is Command.NewScanResult ->
           if (state is State.BluetoothReady)
             state.copy(devices = updateScanResultList(state.devices, command.scanResult))
           else state
         is Command.Filter ->
-          if(state is State.BluetoothReady) state.copy(filter=command.value) else state
+          if (state is State.BluetoothReady) state.copy(filter = command.value) else state
       }
     }
     .doOnNext { replay.onNext(it) }
@@ -114,20 +114,21 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-  private fun filterFeedback() = Observable.create<Command> { emitter ->
-    val listener: (SharedPreferences, String) -> Unit = { sp, k ->
-      if (k == "device_types_to_scan")
-        emitter.onNext(Command.Filter(sp.getString(k, "")))
+  private fun filterFeedback() =
+    Observable.create<Command> { emitter ->
+      val listener: (SharedPreferences, String) -> Unit = { sp, k ->
+        if (k == "device_types_to_scan")
+          emitter.onNext(Command.Filter(sp.getString(k, "")))
+      }
+      prefs.registerOnSharedPreferenceChangeListener(listener)
+      emitter.setCancellable {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+      }
     }
-    prefs.registerOnSharedPreferenceChangeListener(listener)
-    emitter.setCancellable {
-      prefs.unregisterOnSharedPreferenceChangeListener(listener)
-    }
-  }
-    .startWith(Observable.fromCallable<Command> {
-      Command.Filter(prefs.getString("device_types_to_scan", ""))
-    })
-    .asDriverCompleteOnError()
+      .startWith(Observable.fromCallable<Command> {
+        Command.Filter(prefs.getString("device_types_to_scan", ""))
+      })
+      .asDriverCompleteOnError()
 
   // HELPERS
   private fun updateScanResultList(currentResults: List<ScanResult>, newResult: ScanResult) =

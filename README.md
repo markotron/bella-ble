@@ -249,18 +249,269 @@ machine's structure.
   private val replay = ReplaySubject.createWithSize<State>(1)
 
   val state: Driver<State> = Driver
+    .merge(listOf(                                                          // (1)
+      userCommandsFeedback(),
+      scanningFeedback(replay.asDriverCompleteOnError()),
+      bleStateFeedback(),
+      filterFeedback())
+    )
+    .scan<Command, State>(State.StartScanning, ::stateTransitioning)        // (2)
+    .doOnNext { replay.onNext(it) }                                         // (3)
+```
+
+Now, take a look at the third pircture again. 
+
+**(1)** We merge all the commands from all the feedback loops together. Note that we have four feedbacks:
+
+- `userCommandsFeedback()` - we use this feedback if we want to send commands manually. 
+- `scanningFeedback` - this feedback waits for the waits for the `BluetoothReady` state and sends 
+`NewScanResult` commands if it finds new devices that are not filtered out.
+- `bleStateFeedback` - this feedback reacts on Bluetooth state changes (e.g. the user turns the bluetooth 
+off)
+- `filterFeedback` - this feedback reacts on the filter settings changes (e.g. the user wants to filter
+only *Spring* devices)
+
+**(2)** We combine the commands with the current state to produce a new state. 
+
+**(3)** We feed the state back to the feedback loops. In this case only the `scanningFeedback` needs 
+a state, others only react on the resource they are observing. (Take a look at the third picture.)
+
+Let's define the feedback loops. 
+
+**The user commands feedback**
+
+```kotlin
+private val userCommands = PublishSubject.create<Command>()
+  
+private fun userCommandsFeedback() = userCommands.asDriverCompleteOnError()
+  
+fun sendCommand(c: Command) = userCommands.onNext(c)
+```
+
+This is how we manually send commands into our state machine. We call the `sendCommand` function which
+emits the command into the `PublishSubject` which then gets merged into the our state machine. 
+
+**The scanning feedback**
+
+```kotlin
+private val devices = bleClient.scanBleDevices(ScanSettings.Builder().build())
+
+private fun scanningFeedback(state: Driver<State>) =
+    state
+      .distinctUntilChanged { s -> (s as? State.BluetoothReady)?.filter ?: "" }     
+      .switchMapDriver { s ->
+        if (s is State.BluetoothReady)
+          devices
+            .asDriver { logErrorAndComplete("Error while scanning!", it) }
+            .filter { filterOnlySelectedDevices(it.bleDevice.name, s.filter) }
+        else Driver.empty()
+      }
+      .map { Command.NewScanResult(it) }
+```
+
+This feedback waits until the filter changes and, if the state is `BluetoothReady`, it starts 
+scanning for devices, applies the filter and emits the `NewScanResult` command. If the state changes
+from `BluetoothReady` to something else, the `switchMap` cleans the resources and returns the empty
+`Driver`. 
+
+**Bluetooth state feedback**
+
+```kotlin
+private fun bleStateFeedback() =
+    Driver.defer {
+      bleClient
+        .observeStateChanges()
+        .asDriverCompleteOnError()
+        .startWith(bleClient.state)
+        .distinctUntilChanged()
+        .map {
+          when (it) {
+            READY -> Command.SetBleState(State.BluetoothReady(listOf()))
+            BLUETOOTH_NOT_AVAILABLE -> Command.SetBleState(State.BluetoothNotAvailable)
+            LOCATION_PERMISSION_NOT_GRANTED -> Command.SetBleState(State.LocationPermissionNotGranted)
+            LOCATION_SERVICES_NOT_ENABLED -> Command.SetBleState(State.LocationServicesNotEnabled)
+            BLUETOOTH_NOT_ENABLED -> Command.SetBleState(State.BluetoothNotEnabled)
+            null -> throw RuntimeException("The bluetooth state enum is null!")
+          }
+        }
+}
+```
+The feedback start with the current Bluetooth state (`bleClient.state`) and emits new values every
+time the state changes. The `observeStateChanges` returns the `State` enum which we map into commands.
+
+**Filter feedback**
+
+```kotlin
+  private val prefs = PreferenceManager.getDefaultSharedPreferences(app)
+  
+  private fun filterFeedback() = 
+    Observable.create<Command> { emitter ->
+      val listener: (SharedPreferences, String) -> Unit = { sp, k ->
+        if (k == "device_types_to_scan")
+          emitter.onNext(Command.Filter(sp.getString(k, "")))
+      }
+      prefs.registerOnSharedPreferenceChangeListener(listener)
+      emitter.setCancellable {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+      }
+    }
+    .startWith(Observable.fromCallable<Command> {
+      Command.Filter(prefs.getString("device_types_to_scan", ""))
+    })
+    .asDriverCompleteOnError()
+```
+ 
+We store the filter settings in `SharedPreferences` and wrap it in `RxJava` with the `Observable.create`
+method. Every time the filter is changed we emit the new filter value in the `Filter` command.
+
+Let's put everything together. 
+
+Note that a state machine is not an architecture specific object and you can implement it wherever 
+you want. If I'm using it in an activity I usually put the logic in the [ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel.html) 
+class of the [Android's Architecture Components](https://developer.android.com/topic/libraries/architecture/index.html)
+
+The `ViewModel` looks like this:
+
+```kotlin
+sealed class State {
+  object StartScanning : State()
+  object BluetoothNotAvailable : State()
+  object LocationPermissionNotGranted : State()
+  object BluetoothNotEnabled : State()
+  object LocationServicesNotEnabled : State()
+  data class BluetoothReady(val devices: List<ScanResult> = listOf(), val filter: String = "SPRING_LEAF") : State()
+}
+
+sealed class Command {
+  object Refresh : Command()
+  data class NewScanResult(val scanResult: ScanResult) : Command()
+  data class SetBleState(val state: State) : Command()
+  data class Filter(val value: String) : Command()
+}
+
+class ScanViewModel(app: Application) : AndroidViewModel(app) {
+
+  private val bleClient = getApplication<BellaBleApp>().bleClient
+  private val devices = bleClient.scanBleDevices(ScanSettings.Builder().build())
+
+  private val userCommands = PublishSubject.create<Command>()
+  private val replay = ReplaySubject.createWithSize<State>(1)
+
+  private val prefs = PreferenceManager.getDefaultSharedPreferences(app)
+
+  // API
+  val state: Driver<State> = Driver
     .merge(listOf(
       userCommandsFeedback(),
       scanningFeedback(replay.asDriverCompleteOnError()),
       bleStateFeedback(),
       filterFeedback())
     )
-    .scan<Command, State>(State.StartScanning, ::stateTransitioning) 
+    .scan<Command, State>(State.StartScanning) { state, command ->
+      when (command) {
+        is Command.Refresh ->
+          if (state is State.BluetoothReady) state.copy(devices = listOf()) else state
+        is Command.SetBleState -> command.state
+        is Command.NewScanResult ->
+          if (state is State.BluetoothReady)
+            state.copy(devices = updateScanResultList(state.devices, command.scanResult))
+          else state
+        is Command.Filter ->
+          if (state is State.BluetoothReady) state.copy(filter = command.value) else state
+      }
+    }
     .doOnNext { replay.onNext(it) }
+
+  fun sendCommand(c: Command) = userCommands.onNext(c)
+
+  // FEEDBACKS
+  private fun userCommandsFeedback() = userCommands.asDriverCompleteOnError()
+
+  private fun scanningFeedback(state: Driver<State>) =
+    state
+      .distinctUntilChanged { s -> (s as? State.BluetoothReady)?.filter ?: "" }
+      .switchMapDriver { s ->
+        if (s is State.BluetoothReady)
+          devices
+            .asDriver { logErrorAndComplete("Error while scanning!", it) }
+            .filter { filterOnlySelectedDevices(it.bleDevice.name, s.filter) }
+        else Driver.empty()
+      }
+      .map { Command.NewScanResult(it) }
+
+  private fun bleStateFeedback() =
+    Driver.defer {
+      bleClient
+        .observeStateChanges()
+        .asDriverCompleteOnError()
+        .startWith(bleClient.state)
+        .distinctUntilChanged()
+        .map {
+          when (it) {
+            READY -> Command.SetBleState(State.BluetoothReady(listOf()))
+            BLUETOOTH_NOT_AVAILABLE -> Command.SetBleState(State.BluetoothNotAvailable)
+            LOCATION_PERMISSION_NOT_GRANTED -> Command.SetBleState(State.LocationPermissionNotGranted)
+            LOCATION_SERVICES_NOT_ENABLED -> Command.SetBleState(State.LocationServicesNotEnabled)
+            BLUETOOTH_NOT_ENABLED -> Command.SetBleState(State.BluetoothNotEnabled)
+            null -> throw RuntimeException("The bluetooth state enum is null!")
+          }
+        }
+    }
+
+  private fun filterFeedback() =
+    Observable.create<Command> { emitter ->
+      val listener: (SharedPreferences, String) -> Unit = { sp, k ->
+        if (k == "device_types_to_scan")
+          emitter.onNext(Command.Filter(sp.getString(k, "")))
+      }
+      prefs.registerOnSharedPreferenceChangeListener(listener)
+      emitter.setCancellable {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+      }
+    }
+      .startWith(Observable.fromCallable<Command> {
+        Command.Filter(prefs.getString("device_types_to_scan", ""))
+      })
+      .asDriverCompleteOnError()
+
+  // HELPERS
+  private fun updateScanResultList(currentResults: List<ScanResult>, newResult: ScanResult) =
+    currentResults
+      .minus(currentResults
+        .filter { it.bleDevice.macAddress == newResult.bleDevice.macAddress })
+      .plus(newResult)
+      .sortedByDescending { it.rssi }
+
+  private fun logErrorAndComplete(msg: String, t: Throwable): Driver<ScanResult> {
+    Log.d("SCAN VIEW MODEL", msg, t)
+    return Driver.empty()
+  }
+
+  private fun filterOnlySelectedDevices(name: String?, selection: String): Boolean {
+    return if (name == null)
+      false
+    else when (selection) {
+      "LEAF" -> name.startsWith("Leaf")
+      "SPRING" -> name.startsWith("Spring")
+      "SPRING_LEAF" -> name.startsWith("Leaf") || name.startsWith("Spring")
+      else -> throw RuntimeException("No devices like this: $selection")
+    }
+  }
+}
 ```
 
-Now, take a look at the third pircture again.
- 
+Now, to start the state machine, we can subscribe in the `onResume` or `onStart` functions. 
 
- 
+```kotlin
+viewModel
+  .state
+  .drive {
+    when (it) {
+      is State.BluetoothNotEnabled -> showBluetoothDisableSnackbar()
+      is State.BluetoothNotAvailable -> showBluetoothNotAvailableSnackbar()
+      is State.LocationPermissionNotGranted -> showLocationPermissionNotGrantedSnackbar()
+      is State.LocationServicesNotEnabled -> showLocationServiceNotEnabledSnackbar()
+    }
+  }
+```
 
