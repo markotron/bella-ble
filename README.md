@@ -1,17 +1,20 @@
-BellaBle or Bellabeat Bluetooth is a small application for inspecting and debugging Bellabeat's 
-devices.
+BellaBle
+========
+
+*BellaBle* or *[Bellabeat](https://webshop.bellabeat.com/)* Bluetooth is a small application for inspecting 
+and debugging Bellabeat's devices.
 
 It is implemented using our [SharedSequence](https://github.com/NoTests/SharedSequence.kt) library
-and its main purpose is two show it in action. Along with SharedSequence, the app uses RxBleAndroid
-to wrap the Bluetooth network stack in RxJava1, and RxJava2Interop to wrap the RxBleAndroid's 
-Bluetooth client in RxJava2. 
+and its main purpose is to show it in action. Along with SharedSequence, the app uses [RxBleAndroid](http://polidea.github.io/RxAndroidBle/)
+to wrap the Bluetooth network stack in `RxJava1`, and [RxJava2Interop](https://github.com/akarnokd/RxJava2Interop) 
+to wrap the RxBleAndroid's Bluetooth client in `RxJava2`. 
 
 I won't get into the details of RxBleAndroid and RxJava2Interop but no previous knowledge of these
 libraries is required as most of the methods are self-explanatory. 
 
 If you have ever worked with the Android Bluetooth stack, you probably know that there is a lot of
 state to manage. All the cases you have to cover cause the problem to be particularly hard to reason
-about. Only if we have a pragmatic way to model this state, we have a chance to cover all the 
+about. Only if we have a pragmatic way to model the state, we have a chance to cover all the 
 edge-cases.
 
 Let's get started by specifying what the requirements are. 
@@ -32,7 +35,7 @@ Let's list all the things that can go wrong while scanning for devices:
  - Location permissions are needed and can be disabled at any time
  - Location services must be enabled and can be disabled at any time
  
-If nothing of these happens, the bluetooth is ready. Luckily, in the RxBleAndroid library, 
+If nothing of these happens, the bluetooth is ready. Luckily, in the `RxBleAndroid` library, 
 we have an `observeStateChanges()` function that returns the `Observable<State>`, where the `State`
 enum is: 
 
@@ -89,9 +92,11 @@ information about the device: name, mac address, rssi, ...
 
 Now, we have everything to model our `ScanActivity`. It is obvious that we have to combine the two
 observables somehow, but it's not immediately obvious how. To complicate things a little bit more, 
-we'll add a third observable - a filter. Remember that we want to filter only Bellabeat devices. We'll
-add a menu in which we can select if we want to display only `Leaf` devices, only `Spring` devices, or 
-both `Leaf` and `Spring` devices.
+we'll add a third observable - *a filter*. Remember that we want to filter only Bellabeat devices. We'll
+add a menu in which we can select if we want to display only [Leaf](https://webshop.bellabeat.com/pages/leaf-features) 
+devices, only [Spring](https://webshop.bellabeat.com/pages/spring-smart-water-bottle) devices, or 
+both [Leaf](https://webshop.bellabeat.com/pages/leaf-features) and [Spring](https://webshop.bellabeat.com/pages/spring-smart-water-bottle) 
+devices.
 
 If we take a step backwards and look at the whole picture
  - we have the Bluetooth stack which can be in five different states (`BLUETOOTH_NOT_AVAILABLE`, 
@@ -113,7 +118,7 @@ when they change. They are popularly called side-effects. What a better way to m
 to events than a state machine! 
 
 To describe a [state machine](https://en.wikipedia.org/wiki/Finite-state_machine#Mathematical_model)
-we need 5 object: 
+we need 5 objects: 
  - a finite, non empty set of states
  - a finite, non empty set of commands. I adopted the name *command* instead of *event*, don't ask me why. 
  In a formal mathematical definition it is called *the input alphabet*.
@@ -132,7 +137,7 @@ We start with the `StartScanning` state. *The Bluetooth state observable* side-e
 give it to the state-transition function. This function will take the `StartScanning` state and the
 `BluetoothReady` command and return the `BluetoothReady(listOf())` state. *The scanning observable* waits for 
 the `BluetoothReady` state and when the state arrives maps the `scanBleDevices` into the `NewScanResult`
-command. The state-transitioning function adds the scanned device to the `BluetoothReady` state's list. 
+command. The state-transitioning function appends the scanned device to the `BluetoothReady` state's list. 
 
 In the activity's `onResume` we subscribe to the state machine and update the UI as the state changes. 
 
@@ -189,11 +194,11 @@ Our state machine can be in six different states.
  - The initial state: `StartScanning`
  - Bluetooth-problematic states: `BluetoothNotAvailable`, `LocationPermissionNotGranted`, 
  `BluetoothNotEnabled` and `LocationServicesNotEnabled`
- - The state we want to be in: `BluetoothReady`. This state has two extra properties:
+ - The state we want to be in - `BluetoothReady`. This state has two extra properties:
    - `devices` - a list of scanned devices
    - `filter` - the filter we're applying to the list of devices
    
-Next are commands
+Next are commands.
 
 ```kotlin
 sealed class Command {
@@ -204,7 +209,7 @@ sealed class Command {
 }
 ```
 
- - We'll use the `Refresh` command to refresh the list of scanned devices. 
+ - We'll use the `Refresh` command to clear the list of scanned devices. 
  - Every time we find a new device, we'll send a `NewScanResult` command along with the scanned device
  data (`ScanResult`). 
  - When the *Bluetooth state feedback* detects a change in the bluetooth state (e.g. the user turn 
@@ -264,7 +269,7 @@ Now, take a look at the third pircture again.
 **(1)** We merge all the commands from all the feedback loops together. Note that we have four feedbacks:
 
 - `userCommandsFeedback()` - we use this feedback if we want to send commands manually. 
-- `scanningFeedback` - this feedback waits for the waits for the `BluetoothReady` state and sends 
+- `scanningFeedback` - this feedback waits for the `BluetoothReady` state and sends 
 `NewScanResult` commands if it finds new devices that are not filtered out.
 - `bleStateFeedback` - this feedback reacts on Bluetooth state changes (e.g. the user turns the bluetooth 
 off)
@@ -274,7 +279,7 @@ only *Spring* devices)
 **(2)** We combine the commands with the current state to produce a new state. 
 
 **(3)** We feed the state back to the feedback loops. In this case only the `scanningFeedback` needs 
-a state, others only react on the resource they are observing. (Take a look at the third picture.)
+a state, others only react on the resource they are observing.
 
 Let's define the feedback loops. 
 
@@ -289,7 +294,7 @@ fun sendCommand(c: Command) = userCommands.onNext(c)
 ```
 
 This is how we manually send commands into our state machine. We call the `sendCommand` function which
-emits the command into the `PublishSubject` which then gets merged into the our state machine. 
+emits the command into the `PublishSubject` which then gets merged into the state machine. 
 
 **The scanning feedback**
 
@@ -528,7 +533,7 @@ The core of the `ScanViewModel` is the state machine and its feedback loops. Aft
 state and commands, the only thing you need to do is to define the feedback loops and connect them 
 with a state machine (which should be straightforward).
  
-Thinking about state machines brings structure to your code and makes it predictable. When you get the
+Thinking about state machines brings structure to your code and makes it more predictable. When you get the
 grip, you find it easy to read and understand. Finally, if you use *shared sequences* like `Driver`s
 or `Signal`s you don't have to think about sharing the state between observers, observing and 
 subscribing on the main thread, or crashing your app if an error happens inside the state machine. 
