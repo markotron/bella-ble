@@ -114,9 +114,9 @@ to events than a state machine!
 
 To describe a [state machine](https://en.wikipedia.org/wiki/Finite-state_machine#Mathematical_model)
 we need 5 object: 
+ - a finite, non empty set of states
  - a finite, non empty set of commands. I adopted the name *command* instead of *event*, don't ask me why. 
  In a formal mathematical definition it is called *the input alphabet*.
- - a finite, non empty set of states
  - the initial state
  - the state-transition function. This function takes the current state and a command, and returns 
  a new state.
@@ -126,25 +126,141 @@ We start with the initial state. Side-effects observe the state and produce comm
 given to the state-transition function. The state-transition function takes the current state and a 
 produced command and returns a new state. Let's give a concrete example. 
 
-We start with the `StartScanning` state. *The Bluetooth state observable* side-effect waits for the `StartScanning`
-state and when the state arrives maps the `observableStateChanges` into commands. When the 
+We start with the `StartScanning` state. *The Bluetooth state observable* side-effect waits for the 
+`StartScanning` state and when the state arrives maps the `observableStateChanges` into commands. When the 
 `observableStateChanges` returns the `READY` state, we map it into the `BluetoothReady` command and 
 give it to the state-transition function. This function will take the `StartScanning` state and the
 `BluetoothReady` command and return the `BluetoothReady(listOf())` state. *The scanning observable* waits for 
 the `BluetoothReady` state and when the state arrives maps the `scanBleDevices` into the `NewScanResult`
-command. The state-transition function adds the scanned device to the `BluetoothReady` state's list. 
+command. The state-transitioning function adds the scanned device to the `BluetoothReady` state's list. 
 
 In the activity's `onResume` we subscribe to the state machine and update the UI as the state changes. 
 
 It's completely understandable if you're confused. I'll try to illustrate this example with a picture.
 
-![State machine example](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
+![State machine example 1](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
+ 
+When we subscribe to the state machine, it emits the first state - `StartScanning`. Every side-effect
+observes the output state of the state-transitioning function, reacts on it, creates zero, one or more
+commands and feeds them back to the function. As you can see, this side-effects are loops. They are so 
+common in our architectures that we named them **feedback loops** or simply **feedbacks**. With this 
+new terminology, our state machine looks like this:
+ 
+![State machine example 2](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
+
+Note that, in this general form, seems like all feedbacks react when a state changes. That's usually 
+true, but sometimes it's enough to implement a simpler version. We can simply ignore the state and 
+send commands when a resources changes. Actually that's what happen with the *Bluetooth state feedback*.
+We don't have to wait for the `State.StartScanning` to arrive, because that's the initial state and 
+will arrive as soon as we subscribe. Instead, we ignore the feedback's input state and start
+emitting the Bluetooth state commands as soon as we subscribe. Something like this:
+
+![State machine example 3](https://lh3.googleusercontent.com/HuMzt4yIrilGAcTC6Pkw63Lc1tvLLvS0TwlL7_JlcgVXd5E6KteUbiM5rv140fzaAuzD4XtgMdwawnWkHFev3MERmysYSA5jOfOPttC2XSYaiFcsLKOTuCPs7wHrdqKogavqllxgkXsRVz-Otg0vNj5NferKVAL3LBFleXJ0i8JLP426vxdIs9t6AyjjsIDmUBBpQvaiE7N-u0T6a_esROqepu6ECvb2BhTQrKuVxhNrL44tErnDUfsH5e-hevY3U_nNvEh4kCYI9SbEDFfi578is4Tv1-v0-7uuEfj8cU5YRegRnESjbJVx-j3wyDf_vauXDymzpL4r6NgUQCETdimOuoJy6hDr6RYkNGW_UZfCih1XjPFG0CAKMhRqXcGoQsLiLzYWNNLsVWyYrrIZQIazCcM5V4IJ_HrZQ-IWRhNJ0HkqokIA1AAIseF_NYxOi2wcK2Ayq9wu4o_ByRLMeS4BlMGRZbSP7SFU6vlj89klFRjVhfQvsPAD5jyuGOt8NglCn3vBlk0ry-x4_G6L7QRHbUnWUDRnvDj1sOw_Mc3rB0qIiZikj6V_WBUtNCNS=w2560-h1321)
+
+Anyway, that's just a technicality. Conceptually, our state machine is fully described with a second
+picture. 
+
+All of this may seem too complicated for a problem we're trying to solve. But two things are important
+
+ 1. It's not easy to understand it af first, but once you do, you'll see the power and the simplicity 
+ of it. If these pictures are not enough, keep reading. Dive into the code and get back to the pictures 
+ later. 
+ 2. I'm not trying to solve this particular bluetooth problem. I'm trying to generalize it as much as
+ possible so that it's applicable to a broader class of problems. 
+ 
+Let's turn our concept into code!
+
+The first thing we need to describe our state machine is a set of states. To describe states and 
+commands we use `sealed` and `data` classes and objects. 
+
+```kotlin
+sealed class State {
+  object StartScanning : State()
+  object BluetoothNotAvailable : State()
+  object LocationPermissionNotGranted : State()
+  object BluetoothNotEnabled : State()
+  object LocationServicesNotEnabled : State()
+  data class BluetoothReady(val devices: List<ScanResult> = listOf(), val filter: String = "SPRING_LEAF") : State()
+}
+```
+
+Our state machine can be in six different states. 
+
+ - The initial state: `StartScanning`
+ - Bluetooth-problematic states: `BluetoothNotAvailable`, `LocationPermissionNotGranted`, 
+ `BluetoothNotEnabled` and `LocationServicesNotEnabled`
+ - The state we want to be in: `BluetoothReady`. This state has two extra properties:
+   - `devices` - a list of scanned devices
+   - `filter` - the filter we're applying to the list of devices
+   
+Next are commands
+
+```kotlin
+sealed class Command {
+  object Refresh : Command()
+  data class NewScanResult(val scanResult: ScanResult) : Command()
+  data class SetBleState(val state: State) : Command()
+  data class Filter(val value: String) : Command()
+}
+```
+
+ - We'll use the `Refresh` command to refresh the list of scanned devices. 
+ - Every time we find a new device, we'll send a `NewScanResult` command along with the scanned device
+ data (`ScanResult`). 
+ - When the *Bluetooth state feedback* detects a change in the bluetooth state (e.g. the user turn 
+ the bluetooth off), it will send the `SetBleState` command with the appropriate state. We could have
+ a separate command for every state but there is no need for that. Arguably, the code would be easier 
+ to understand but definitely longer. 
+ - When the user changes the filter settings, the *filter feedback* will send the `Filter` command 
+ with the specified filter (represented as a `String` in this example). Note that we haven't displayed
+ the *filter feedback* in the pictures above to make them easier to understand. 
+ 
+We've already said that the initial state is `StartScanning`.
+
+The state-transitioning function looks like this:
+
+```kotlin
+fun stateTransitioning(state: State, command: Command) = 
+  when (command) {
+    is Command.Refresh ->
+      if(state is State.BluetoothReady) state.copy(devices = listOf()) else state
+    is Command.SetBleState -> command.state
+    is Command.NewScanResult ->
+      if (state is State.BluetoothReady)
+        state.copy(devices = updateScanResultList(state.devices, command.scanResult))
+      else state
+    is Command.Filter ->
+      if(state is State.BluetoothReady) state.copy(filter=command.value) else state
+  }
+```
+
+ - If the command is `Refresh` and the state is `BluetoothReady` we clear the `devices` list. If the
+ state is not `BluetoothReady`, we just return the current state because there is nothing to refresh. 
+ - If the command is `SetBleState`, we simply set the state. 
+ - If the command is `NewScanResult` we append the `ScanResult` to the current list.
+ - If the command is `Filter` we change the filter property of the `BluetoothReady` state. 
+ 
+In this example our set of final states is empty, as we want our state machine to run indefinitely.
+
+Good, we have all the components except the feedback loops. Before we define them, let's see the 
+machine's structure. 
+
+```kotlin
+  private val replay = ReplaySubject.createWithSize<State>(1)
+
+  val state: Driver<State> = Driver
+    .merge(listOf(
+      userCommandsFeedback(),
+      scanningFeedback(replay.asDriverCompleteOnError()),
+      bleStateFeedback(),
+      filterFeedback())
+    )
+    .scan<Command, State>(State.StartScanning, ::stateTransitioning) 
+    .doOnNext { replay.onNext(it) }
+```
+
+Now, take a look at the third pircture again.
  
 
-
-
-
-
-
-
  
+

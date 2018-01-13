@@ -30,7 +30,7 @@ import org.notests.sharedsequence.*
 import java.util.concurrent.TimeUnit
 
 sealed class State {
-  object Start : State()
+  object StartScanning : State()
   object BluetoothNotAvailable : State()
   object LocationPermissionNotGranted : State()
   object BluetoothNotEnabled : State()
@@ -50,7 +50,7 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
   private val bleClient = getApplication<BellaBleApp>().bleClient
   private val devices = bleClient.scanBleDevices(ScanSettings.Builder().build())
 
-  private val commands = PublishSubject.create<Command>()
+  private val userCommands = PublishSubject.create<Command>()
   private val replay = ReplaySubject.createWithSize<State>(1)
 
   private val prefs = PreferenceManager.getDefaultSharedPreferences(app)
@@ -58,28 +58,31 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
   // API
   val state: Driver<State> = Driver
     .merge(listOf(
-      commands.asDriverCompleteOnError(),
+      userCommandsFeedback(),
       scanningFeedback(replay.asDriverCompleteOnError()),
       bleStateFeedback(),
       filterFeedback())
     )
-    .scan<Command, State>(State.Start) { state, command ->
+    .scan<Command, State>(State.StartScanning) { state, command ->
       when (command) {
         is Command.Refresh ->
-          (state as? State.BluetoothReady)?.copy(devices = listOf()) ?: state
+          if(state is State.BluetoothReady) state.copy(devices = listOf()) else state
         is Command.SetBleState -> command.state
         is Command.NewScanResult ->
           if (state is State.BluetoothReady)
             state.copy(devices = updateScanResultList(state.devices, command.scanResult))
           else state
-        is Command.Filter -> (state as? State.BluetoothReady)?.copy(filter = command.value) ?: state
+        is Command.Filter ->
+          if(state is State.BluetoothReady) state.copy(filter=command.value) else state
       }
     }
     .doOnNext { replay.onNext(it) }
 
-  fun sendCommand(c: Command) = commands.onNext(c)
+  fun sendCommand(c: Command) = userCommands.onNext(c)
 
   // FEEDBACKS
+  private fun userCommandsFeedback() = userCommands.asDriverCompleteOnError()
+
   private fun scanningFeedback(state: Driver<State>) =
     state
       .distinctUntilChanged { s -> (s as? State.BluetoothReady)?.filter ?: "" }
