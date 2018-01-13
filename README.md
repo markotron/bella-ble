@@ -514,4 +514,31 @@ viewModel
     }
   }
 ```
+To complete the activity we only have to initialize the `ScanViewModel` class and setup the UI. I'll 
+omit the details as you have them in the [repository](https://github.com/markotron/bella-ble). 
 
+Take a look again at the final `ScanViewModel` class. Before the class definition, we have the whole
+state and all the commands. Notice that there is no implicit (hidden) state. Everything that can 
+happen with our state machine (basically, with our activity) is described with the `State` class and 
+its subclasses. Every interaction, manual or not, is described with the `Command` class and its 
+subclasses. Just by looking at the commands, you can see that the only thing the user can do with 
+this activity (except navigating to a different activity) is refreshing and filtering the device list. 
+
+The core of the `ScanViewModel` is the state machine and its feedback loops. After you model your 
+state and commands, the only thing you need to do is to define the feedback loops and connect them 
+with a state machine (which should be straightforward).
+ 
+Thinking about state machines brings structure to your code and makes it predictable. When you get the
+grip, you find it easy to read and understand. Finally, if you use *shared sequences* like `Driver`s
+or `Signal`s you don't have to think about sharing the state between observers, observing and 
+subscribing on the main thread, or crashing your app if an error happens inside the state machine. 
+
+In the [repository](https://github.com/markotron/bella-ble) you can find another example which 
+uses `Signal`s instead of `Driver`s. It's the [CommandExecutor](https://github.com/markotron/bella-ble/blob/master/app/src/main/kotlin/com/markotron/ble/bluetooth/CommandExecutor.kt)
+class which is used for sending and receiving data from a specific Bluetooth device. 
+
+We find this feedback-based state machine concept so useful that we extracted it in a separate
+library and named it [RxFeedback](https://github.com/NoTests/RxFeedback.kt). In the future, you'll 
+be able to find many more different example there. I hope. :)
+
+Feel free to comment if you have any questions or suggestions. 
